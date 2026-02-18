@@ -3,7 +3,7 @@
 [![PyPI Downloads](https://static.pepy.tech/badge/curl-cffi/week)](https://pepy.tech/projects/curl-cffi)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/curl_cffi)
 [![PyPI version](https://badge.fury.io/py/curl-cffi.svg)](https://badge.fury.io/py/curl-cffi)
-[![Generic badge](https://img.shields.io/badge/Telegram%20Group-join-blue?logo=telegram)](https://t.me/real_curl_cffi)
+[![Generic badge](https://img.shields.io/badge/Telegram%20Channel-join-blue?logo=telegram)](https://t.me/impersonate_pro)
 [![Generic badge](https://img.shields.io/badge/Discord-join-purple?logo=blue)](https://discord.gg/kJqMHHgdn2)
 
 [Documentation](https://curl-cffi.readthedocs.io)
@@ -16,13 +16,19 @@ python http clients like `httpx` or `requests`, `curl_cffi` can impersonate
 browsers' TLS/JA3 and HTTP/2 fingerprints. If you are blocked by some
 website for no obvious reason, you can give `curl_cffi` a try.
 
-Python 3.9 is the minimum supported version since v0.10.
+Python 3.10 is the minimum supported version since v0.14.
 
 ## Recall.ai - API for meeting recordings
 
 <a href="https://www.recall.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=lexiforest-curl_cffi" target="_blank"><img src="https://cdn.prod.website-files.com/620d732b1f1f7b244ac89f0e/66b294e51ee15f18dd2b171e_recall-logo.svg" alt="Recall.ai" height="47" width="149"></a>
 
 If you’re looking for a meeting recording API, consider checking out [Recall.ai](https://www.recall.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=lexiforest-curl_cffi), an API that records Zoom, Google Meet, Microsoft Teams, in-person meetings, and more.
+
+## Residential Proxies
+
+<a href="https://www.thordata.com/?ls=github&lk=curl_cffi" target="_blank"><img src="https://raw.githubusercontent.com/lexiforest/curl_cffi/main/assets/thordata.png" alt="Thordata" height="126" width="240"></a>
+
+Thordata: A reliable and cost-effective proxy service provider. One-click collection of public network data, providing enterprises and developers with stable, efficient, and compliant global proxy IP services. Register for a free trial of [residential proxies](https://www.thordata.com/products/residential-proxies/?ls=github&lk=curl_cffi) and receive 2000 free SERP API calls.
 
 ## Sponsors
 
@@ -36,7 +42,7 @@ Maintenance of this project is made possible by all the <a href="https://github.
 
 Yescaptcha is a proxy service that bypasses Cloudflare and uses the API interface to
 obtain verified cookies (e.g. `cf_clearance`). Click [here](https://yescaptcha.com/i/stfnIO)
-to register: https://yescaptcha.com/i/stfnIO
+to register: <https://yescaptcha.com/i/stfnIO>
 
 ------
 
@@ -70,10 +76,12 @@ No browser automation. Just simple API calls that return the exact cookies and h
 |sync|✅|❌|✅|✅|✅|
 |async|❌|✅|✅|❌|✅|
 |websocket|❌|✅|❌|❌|✅|
+|native retry|❌|❌|❌|❌|✅|
 |fingerprints|❌|❌|❌|❌|✅|
 |speed|🐇|🐇🐇|🐇|🐇🐇|🐇🐇|
 
 Notes:
+
 1. For pycurl, you need an http/3 enabled libcurl to make it work, while curl_cffi packages libcurl-impersonate inside Python wheels.
 2. Since v0.11.4.
 
@@ -84,6 +92,10 @@ Notes:
 This should work on Linux, macOS and Windows out of the box.
 If it does not work on you platform, you may need to compile and install `curl-impersonate`
 first and set some environment variables like `LD_LIBRARY_PATH`.
+
+Android support, including Termux, is currently in beta, you can install the beta release for testing.
+For BSD systems, we need to get libcurl-impersonate compile first, and then add support in curl_cffi.
+If you are using these OSes, please lend an hand.
 
 To install beta releases:
 
@@ -96,16 +108,11 @@ To install unstable version from GitHub:
     make preprocess
     pip install .
 
-On macOS, you may need to install the following dependencies:
-
-    brew install zstd nghttp2
-
 ## Usage
 
 `curl_cffi` comes with a low-level `curl` API and a high-level `requests`-like API.
 
 ### requests-like
-
 
 ```python
 import curl_cffi
@@ -173,12 +180,12 @@ to specify your own customized fingerprints. See the [docs on impersonation](htt
 
 |Browser|Open Source| Pro version|
 |---|---|---|
-|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>|chrome132, chrome134, chrome135|
+|Chrome|chrome99, chrome100, chrome101, chrome104, chrome107, chrome110, chrome116<sup>[1]</sup>, chrome119<sup>[1]</sup>, chrome120<sup>[1]</sup>, chrome123<sup>[3]</sup>, chrome124<sup>[3]</sup>, chrome131<sup>[4]</sup>, chrome133a<sup>[5][6]</sup>, chrome136<sup>[6]</sup>, chrome142|chrome132, chrome134, chrome135|
 |Chrome Android| chrome99_android, chrome131_android <sup>[4]</sup>|chrome132_android, chrome133_android, chrome134_android, chrome135_android|
 |Chrome iOS|N/A|coming soon|
 |Safari <sup>[7]</sup>|safari153 <sup>[2]</sup>, safari155 <sup>[2]</sup>, safari170 <sup>[1]</sup>, safari180 <sup>[4]</sup>, safari184 <sup>[6]</sup>, safari260 <sup>[8]</sup>|coming soon|
 |Safari iOS <sup>[7]</sup>| safari172_ios<sup>[1]</sup>, safari180_ios<sup>[4]</sup>, safari184_ios <sup>[6]</sup>, safari260_ios <sup>[8]</sup>|coming soon|
-|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>|coming soon|
+|Firefox|firefox133<sup>[5]</sup>, firefox135<sup>[7]</sup>, firefox144|coming soon|
 |Firefox Android|N/A|firefox135_android|
 |Tor|tor145 <sup>[7]</sup>|coming soon|
 |Edge|edge99, edge101|edge133, edge135|
@@ -187,6 +194,7 @@ to specify your own customized fingerprints. See the [docs on impersonation](htt
 
 
 Notes:
+
 1. Added in version `0.6.0`.
 2. Fixed in version `0.6.0`, previous http2 fingerprints were [not correct](https://github.com/lwthiker/curl-impersonate/issues/215).
 3. Added in version `0.7.0`.
@@ -230,7 +238,6 @@ async with AsyncSession() as s:
 For low-level APIs, Scrapy integration and other advanced topics, see the
 [docs](https://curl-cffi.readthedocs.io) for more details.
 
-
 ### WebSockets
 
 ```python
@@ -249,11 +256,11 @@ ws.run_forever("wss://api.gemini.com/v1/marketdata/BTCUSD")
 import asyncio
 from curl_cffi import AsyncSession
 
-async with AsyncSession() as s:
-    ws = await s.ws_connect("wss://echo.websocket.org")
-    await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
-    async for message in ws:
-        print(message)
+async with AsyncSession() as session:
+    async with session.ws_connect("wss://echo.websocket.org") as ws:
+        await asyncio.gather(*[ws.send_str("Hello, World!") for _ in range(10)])
+        async for message in ws:
+            print(message)
 ```
 
 ## Ecosystem
@@ -274,3 +281,16 @@ async with AsyncSession() as s:
 
 When submitting an PR, please use a different branch other than `main` and check the
 "Allow edits by maintainers" box, so I can update your PR with lint or style fixes. Thanks!
+
+### AI Policy
+
+- Using AI is neither encouraged nor discouraged, use it by your own choice.
+- The bottom line here is that every line of code should be **reviewed by human**, and should be [proven to work](https://simonwillison.net/2025/Dec/18/code-proven-to-work/).
+- It's not guaranteed that AI will come up with the cleanest solution, you are responsible to guide it to the right way you know.
+- Fix any lint errors, make sure your code follows the established convention in this project.
+- LLM tends to generate extensive or none comments, revise the comments and make sure they are concise and helpful.
+- It's absolutely **not acceptable** to generate the entire PR summary by LLM. To communicate with other human, use words from a human.
+- The only acceptable exception is to fix grammar issues if you are not a native English speaker.
+- The essence here is to keep [Human in the loop](https://discourse.llvm.org/t/rfc-llvm-ai-tool-policy-human-in-the-loop/89159)
+
+You can even feed the policy above to your "copilot" to let it adjust the style for you. :P

@@ -240,7 +240,7 @@ async def test_response_cookies(server):
 async def test_elapsed(server):
     async with AsyncSession() as s:
         r = await s.get(str(server.url.copy_with(path="/slow_response")))
-        assert r.elapsed > 0.1
+        assert r.elapsed.total_seconds() > 0.1
 
 
 async def test_reason(server):
@@ -463,7 +463,7 @@ async def test_async_session_auto_raise_for_status_enabled(server):
     """Test that AsyncSession automatically raises HTTPError for error status codes
     when raise_for_status=True"""
     from curl_cffi.requests.exceptions import HTTPError
-    
+
     async with AsyncSession(raise_for_status=True) as s:
         try:
             await s.get(str(server.url.copy_with(path="/status/404")))

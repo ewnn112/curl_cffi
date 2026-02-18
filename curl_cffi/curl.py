@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import locale
 import re
 import locale
 import struct
@@ -7,7 +8,7 @@ import sys
 import warnings
 from http.cookies import SimpleCookie
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import certifi
 
@@ -32,9 +33,11 @@ if TYPE_CHECKING:
 class CurlError(Exception):
     """Base exception for curl_cffi package"""
 
-    def __init__(self, msg, code: Union[CurlECode, Literal[0]] = 0, *args, **kwargs):
+    def __init__(
+        self, msg: str, code: int | CurlECode | Literal[0] = 0, *args, **kwargs
+    ) -> None:
         super().__init__(msg, *args, **kwargs)
-        self.code: Union[CurlECode, Literal[0]] = code
+        self.code: int | CurlECode | Literal[0] = code
 
 
 CURLINFO_TEXT = 0
@@ -145,6 +148,8 @@ class Curl:
     Wrapper for ``curl_easy_*`` functions of libcurl.
     """
 
+    _WS_RECV_BUFFER_SIZE = 128 * 1024  # 128 kB
+
     def __init__(self, cacert: str = "", debug: bool = False, handle=None) -> None:
         """
         Parameters:
@@ -158,6 +163,7 @@ class Curl:
         self._resolve = ffi.NULL
         self._cacert = cacert or DEFAULT_CACERT
         self._is_cert_set = False
+        self._skip_cacert = False
         self._write_handle: Any = None
         self._header_handle: Any = None
         self._debug_handle: Any = None
@@ -166,6 +172,12 @@ class Curl:
         self._error_buffer = ffi.new("char[]", 256)
         self._debug = debug
         self._set_error_buffer()
+
+        # Pre-allocated CFFI objects for WebSocket performance
+        self._ws_recv_buffer = ffi.new("char[]", self._WS_RECV_BUFFER_SIZE)
+        self._ws_recv_n_recv = ffi.new("size_t *")
+        self._ws_recv_p_frame = ffi.new("struct curl_ws_frame **")
+        self._ws_send_n_sent = ffi.new("size_t *")
 
     def _set_error_buffer(self) -> None:
         ret = lib._curl_easy_setopt(self._curl, CurlOpt.ERRORBUFFER, self._error_buffer)
@@ -183,6 +195,9 @@ class Curl:
         self.close()
 
     def _check_error(self, errcode: int, *args: Any) -> None:
+        if errcode == 0:
+            return
+
         error = self._get_error(errcode, *args)
         if error is not None:
             raise error
@@ -316,7 +331,7 @@ class Curl:
 
         return ret
 
-    def getinfo(self, option: CurlInfo) -> Union[bytes, int, float, list]:
+    def getinfo(self, option: CurlInfo) -> bytes | int | float | list[str | int]:
         """Wrapper for ``curl_easy_getinfo``. Gets information in response after
         curl.perform.
 
@@ -382,6 +397,8 @@ class Curl:
         )
 
     def _ensure_cacert(self) -> None:
+        if self._skip_cacert:
+            return
         if not self._is_cert_set:
             ret = self.setopt(CurlOpt.CAINFO, self._cacert)
             self._check_error(ret, "set cacert")
@@ -456,6 +473,7 @@ class Curl:
     def reset(self) -> None:
         """Reset all curl options, wrapper for ``curl_easy_reset``."""
         self._is_cert_set = False
+        self._skip_cacert = False
         if self._curl is not None:
             lib.curl_easy_reset(self._curl)
             self._set_error_buffer()
@@ -515,11 +533,12 @@ class Curl:
             self._curl = None
         ffi.release(self._error_buffer)
 
-    def ws_recv(self, n: int = 1024) -> tuple[bytes, CurlWsFrame]:
-        """Receive a frame from a websocket connection.
+        if self._ws_recv_buffer is not None:
+            ffi.release(self._ws_recv_buffer)
+            self._ws_recv_buffer = None
 
-        Args:
-            n: maximum data to receive.
+    def ws_recv(self) -> tuple[bytes, CurlWsFrame]:
+        """Receive a frame from a websocket connection.
 
         Returns:
             a tuple of frame content and curl frame meta struct.
@@ -530,19 +549,24 @@ class Curl:
         if self._curl is None:
             raise CurlError("Cannot receive websocket data on closed handle.")
 
-        buffer = ffi.new("char[]", n)
-        n_recv = ffi.new("size_t *")
-        p_frame = ffi.new("struct curl_ws_frame **")
-
-        ret = lib.curl_ws_recv(self._curl, buffer, n, n_recv, p_frame)
-        self._check_error(ret, "WS_RECV")
+        if ret := lib.curl_ws_recv(
+            self._curl,
+            self._ws_recv_buffer,
+            self._WS_RECV_BUFFER_SIZE,
+            self._ws_recv_n_recv,
+            self._ws_recv_p_frame,
+        ):
+            self._check_error(ret, "WS_RECV")
 
         # Frame meta explained: https://curl.se/libcurl/c/curl_ws_meta.html
-        frame = p_frame[0]
+        return (
+            ffi.buffer(self._ws_recv_buffer)[: self._ws_recv_n_recv[0]],
+            self._ws_recv_p_frame[0],
+        )
 
-        return ffi.buffer(buffer)[: n_recv[0]], frame
-
-    def ws_send(self, payload: bytes, flags: CurlWsFlag = CurlWsFlag.BINARY) -> int:
+    def ws_send(
+        self, payload: bytes | memoryview, flags: CurlWsFlag | int = CurlWsFlag.BINARY
+    ) -> int:
         """Send data to a websocket connection.
 
         Args:
@@ -550,7 +574,7 @@ class Curl:
             flags: websocket flag to set for the frame, default: binary.
 
         Returns:
-            0 if no error.
+            The number of bytes sent.
 
         Raises:
             CurlError: if failed.
@@ -558,11 +582,16 @@ class Curl:
         if self._curl is None:
             raise CurlError("Cannot send websocket data on closed handle.")
 
-        n_sent = ffi.new("size_t *")
-        buffer = ffi.from_buffer(payload)
-        ret = lib.curl_ws_send(self._curl, buffer, len(payload), n_sent, 0, flags)
-        self._check_error(ret, "WS_SEND")
-        return n_sent[0]
+        if ret := lib.curl_ws_send(
+            self._curl,
+            ffi.from_buffer(payload),
+            len(payload),
+            self._ws_send_n_sent,
+            0,
+            flags,
+        ):
+            self._check_error(ret, "WS_SEND")
+        return self._ws_send_n_sent[0]
 
     def ws_close(self, code: int = 1000, message: bytes = b"") -> int:
         """Close a websocket connection. Shorthand for :meth:`ws_send`
@@ -579,13 +608,14 @@ class Curl:
         Raises:
             CurlError: if failed.
         """
-        return self.ws_send(struct.pack("!H", code) + message)
+        payload = struct.pack("!H", code) + message
+        return self.ws_send(payload, flags=CurlWsFlag.CLOSE)
 
 
 class CurlMime:
     """Wrapper for the ``curl_mime_`` API."""
 
-    def __init__(self, curl: Optional[Curl] = None):
+    def __init__(self, curl: Curl | None = None):
         """
         Args:
             curl: Curl instance to use.
@@ -597,10 +627,10 @@ class CurlMime:
         self,
         name: str,
         *,
-        content_type: Optional[str] = None,
-        filename: Optional[str] = None,
-        local_path: Optional[Union[str, bytes, Path]] = None,
-        data: Optional[bytes] = None,
+        content_type: str | None = None,
+        filename: str | None = None,
+        local_path: str | bytes | Path | None = None,
+        data: bytes | None = None,
     ) -> None:
         """Add a mime part for a mutlipart html form.
 
@@ -662,7 +692,7 @@ class CurlMime:
             form.addpart(**file)
         return form
 
-    def attach(self, curl: Optional[Curl] = None) -> None:
+    def attach(self, curl: Curl | None = None) -> None:
         """Attach the mime instance to a curl instance."""
         c = curl if curl else self._curl
         c.setopt(CurlOpt.MIMEPOST, self._form)

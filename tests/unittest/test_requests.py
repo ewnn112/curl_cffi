@@ -2,12 +2,13 @@ import base64
 import json
 import time
 from io import BytesIO
+from uuid import uuid4
 
 import pytest
 from charset_normalizer import detect
 
 import curl_cffi
-from curl_cffi import CurlOpt, requests
+from curl_cffi import Curl, CurlOpt, requests
 from curl_cffi.const import CurlECode, CurlInfo
 from curl_cffi.requests.errors import SessionClosed
 from curl_cffi.requests.exceptions import HTTPError
@@ -414,6 +415,25 @@ def test_session_timeout(server):
         )
 
 
+def test_session_retry(server):
+    fail_key = uuid4().hex
+    fail_url = str(
+        server.url.copy_with(path="/retry_once", query=f"key={fail_key}".encode())
+    )
+    with pytest.raises(HTTPError):  # noqa: SIM117
+        with requests.Session(raise_for_status=True) as s:
+            s.get(fail_url)
+
+    retry_key = uuid4().hex
+    retry_url = str(
+        server.url.copy_with(path="/retry_once", query=f"key={retry_key}".encode())
+    )
+    with requests.Session(retry=1, raise_for_status=True) as s:
+        r = s.get(retry_url)
+    assert r.status_code == 200
+    assert r.content == b"ok"
+
+
 def test_post_timeout(server):
     with pytest.raises(requests.RequestsError):
         requests.post(str(server.url.copy_with(path="/slow_response")), timeout=0.1)
@@ -452,6 +472,20 @@ def test_verify(https_server):
 def test_verify_false(https_server):
     r = requests.get(str(https_server.url), verify=False)
     assert r.status_code == 200
+
+
+def test_verify_false_skips_cainfo(https_server, tmp_path):
+    cacert_path = tmp_path / "custom_ca.pem"
+    cacert_path.write_text("", encoding="utf-8")
+    curl = Curl(cacert=str(cacert_path))
+    with requests.Session(
+        curl=curl,
+        verify=False,
+        curl_infos=[CurlInfo.CAINFO],
+    ) as s:
+        r = s.get(str(https_server.url))
+    assert r.status_code == 200
+    assert r.infos[CurlInfo.CAINFO] != str(cacert_path).encode()
 
 
 def test_referer(server):
@@ -496,7 +530,7 @@ def test_response_cookies(server):
 
 def test_elapsed(server):
     r = requests.get(str(server.url.copy_with(path="/slow_response")))
-    assert r.elapsed > 0.1
+    assert r.elapsed.total_seconds() > 0.1
 
 
 def test_reason(server):
